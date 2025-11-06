@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Karmic Canteen Manager</title>
+  <script src="/_sdk/data_sdk.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    * {
+      box-sizing: border-box;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="min-h-full">
+  <div id="app" class="min-h-full flex flex-col"></div>
+  <script>
+    // Configuration
+    const defaultConfig = {
+      app_title: "Karmic Canteen Manager",
+      company_name: "Karmic Solutions",
+      breakfast_menu: "Idli, Dosa, Upma, Poha",
+      lunch_menu: "Rice, Chapati, Dal, Vegetables, Curd",
+      snacks_menu: "Tea, Coffee, Samosa, Biscuits",
+      cutoff_time: "9:00 PM",
+      background_color: "#f0f9ff",
+      surface_color: "#ffffff",
+      text_color: "#1e293b",
+      primary_action_color: "#0ea5e9",
+      secondary_action_color: "#64748b"
+    };
+
+    // State management
+    let currentView = 'employee';
+    let currentEmployeeId = '';
+    let currentEmployeeName = '';
+    let allMealSelections = [];
+    let isLoading = false;
+
+    // Data handler for SDK
+    const dataHandler = {
+      onDataChanged(data) {
+        allMealSelections = data;
+        renderCurrentView();
+      }
+    };
+
+    // Initialize SDK
+    async function initializeApp() {
+      const initResult = await window.dataSdk.init(dataHandler);
+      if (!initResult.isOk) {
+        showToast('Failed to initialize app', 'error');
+        return;
+      }
+      renderCurrentView();
+    }
+
+    // Get tomorrow's date in YYYY-MM-DD format
+    function getTomorrowDate() {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return tomorrow.toISOString().split('T')[0];
+    }
+
+    // Format date for display
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+      return date.toLocaleDateString('en-IN', options);
+    }
+
+    // Get current user's selection for tomorrow
+    function getCurrentUserSelection() {
+      const tomorrowDate = getTomorrowDate();
+      return allMealSelections.find(
+        selection => selection.employee_id === currentEmployeeId && selection.date === tomorrowDate
+      );
+    }
+
+    // Show toast notification
+    function showToast(message, type = 'success') {
+      const toast = document.createElement('div');
+      const bgColor = type === 'success' ? window.elementSdk.config.primary_action_color || defaultConfig.primary_action_color : '#ef4444';
+      toast.className = 'fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg text-white z-50 animate-fade-in';
+      toast.style.backgroundColor = bgColor;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
+    }
+
+    // Employee View Functions
+    function renderEmployeeView() {
+      const config = window.elementSdk.config;
+      const appTitle = config.app_title || defaultConfig.app_title;
+      const companyName = config.company_name || defaultConfig.company_name;
+      const breakfastMenu = config.breakfast_menu || defaultConfig.breakfast_menu;
+      const lunchMenu = config.lunch_menu || defaultConfig.lunch_menu;
+      const snacksMenu = config.snacks_menu || defaultConfig.snacks_menu;
+      const cutoffTime = config.cutoff_time || defaultConfig.cutoff_time;
+      const backgroundColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      const fontSize = config.font_size || 16;
+      const fontFamily = config.font_family || 'system-ui, -apple-system, sans-serif';
+
+      const app = document.getElementById('app');
+      app.style.backgroundColor = backgroundColor;
+      app.style.color = textColor;
+      app.style.fontFamily = `${fontFamily}, system-ui, -apple-system, sans-serif`;
+
+      const tomorrowDate = getTomorrowDate();
+      const currentSelection = getCurrentUserSelection();
+
+      app.innerHTML = `
+        <div class="flex-1 flex flex-col">
+          <!-- Header -->
+          <div class="shadow-sm" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+            <div class="max-w-4xl mx-auto">
+              <h1 style="font-size: ${fontSize * 1.75}px; font-weight: 700; margin-bottom: 0.25rem;">${appTitle}</h1>
+              <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">${companyName}</p>
+            </div>
+          </div>
+
+          <!-- Main Content -->
+          <div class="flex-1 max-w-4xl mx-auto w-full" style="padding: 2rem 1.5rem;">
+            ${!currentEmployeeId ? `
+              <!-- Login Form -->
+              <div class="shadow-lg rounded-lg" style="background-color: ${surfaceColor}; padding: 2rem; max-width: 28rem; margin: 0 auto;">
+                <h2 style="font-size: ${fontSize * 1.5}px; font-weight: 600; margin-bottom: 1.5rem;">Employee Login</h2>
+                <form id="loginForm" class="space-y-4">
+                  <div>
+                    <label for="employeeId" style="display: block; font-size: ${fontSize * 0.875}px; font-weight: 500; margin-bottom: 0.5rem;">Employee ID</label>
+                    <input 
+                      type="text" 
+                      id="employeeId" 
+                      required
+                      style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; font-size: ${fontSize}px;"
+                      placeholder="Enter your employee ID"
+                    >
+                  </div>
+                  <div>
+                    <label for="employeeName" style="display: block; font-size: ${fontSize * 0.875}px; font-weight: 500; margin-bottom: 0.5rem;">Full Name</label>
+                    <input 
+                      type="text" 
+                      id="employeeName" 
+                      required
+                      style="width: 100%; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; font-size: ${fontSize}px;"
+                      placeholder="Enter your full name"
+                    >
+                  </div>
+                  <button 
+                    type="submit"
+                    style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; font-weight: 600; font-size: ${fontSize}px; background-color: ${primaryColor}; color: white; border: none; cursor: pointer;"
+                    onmouseover="this.style.opacity='0.9'"
+                    onmouseout="this.style.opacity='1'"
+                  >
+                    Login
+                  </button>
+                </form>
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e2e8f0; text-align: center;">
+                  <button 
+                    onclick="switchToAdminView()"
+                    style="font-size: ${fontSize * 0.875}px; color: ${secondaryColor}; background: none; border: none; cursor: pointer; text-decoration: underline;"
+                  >
+                    Admin Login
+                  </button>
+                </div>
+              </div>
+            ` : `
+              <!-- Meal Selection -->
+              <div class="space-y-6">
+                <!-- User Info -->
+                <div class="flex justify-between items-center">
+                  <div>
+                    <h2 style="font-size: ${fontSize * 1.25}px; font-weight: 600;">Welcome, ${currentEmployeeName}</h2>
+                    <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">ID: ${currentEmployeeId}</p>
+                  </div>
+                  <button 
+                    onclick="logout()"
+                    style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: ${fontSize * 0.875}px; background-color: ${secondaryColor}; color: white; border: none; cursor: pointer;"
+                    onmouseover="this.style.opacity='0.9'"
+                    onmouseout="this.style.opacity='1'"
+                  >
+                    Logout
+                  </button>
+                </div>
+
+                <!-- Date and Cutoff Info -->
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <h3 style="font-size: ${fontSize * 1.125}px; font-weight: 600; margin-bottom: 0.5rem;">Meal Selection for Tomorrow</h3>
+                  <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">${formatDate(tomorrowDate)}</p>
+                  <p style="font-size: ${fontSize * 0.875}px; margin-top: 0.5rem; color: #dc2626;">⏰ Submit before ${cutoffTime} today</p>
+                </div>
+
+                <!-- Menu Display -->
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <h3 style="font-size: ${fontSize * 1.125}px; font-weight: 600; margin-bottom: 1rem;">Tomorrow's Menu</h3>
+                  <div class="space-y-3">
+                    <div>
+                      <p style="font-size: ${fontSize * 0.875}px; font-weight: 600; margin-bottom: 0.25rem;">🌅 Breakfast</p>
+                      <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">${breakfastMenu}</p>
+                    </div>
+                    <div>
+                      <p style="font-size: ${fontSize * 0.875}px; font-weight: 600; margin-bottom: 0.25rem;">🍽️ Lunch</p>
+                      <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">${lunchMenu}</p>
+                    </div>
+                    <div>
+                      <p style="font-size: ${fontSize * 0.875}px; font-weight: 600; margin-bottom: 0.25rem;">☕ Evening Snacks</p>
+                      <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">${snacksMenu}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Meal Selection Form -->
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <h3 style="font-size: ${fontSize * 1.125}px; font-weight: 600; margin-bottom: 1rem;">Select Your Meals</h3>
+                  <form id="mealSelectionForm" class="space-y-4">
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        id="breakfast" 
+                        ${currentSelection?.breakfast ? 'checked' : ''}
+                        style="width: 1.25rem; height: 1.25rem; cursor: pointer;"
+                      >
+                      <span style="font-size: ${fontSize}px;">Breakfast</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        id="lunch" 
+                        ${currentSelection?.lunch ? 'checked' : ''}
+                        style="width: 1.25rem; height: 1.25rem; cursor: pointer;"
+                      >
+                      <span style="font-size: ${fontSize}px;">Lunch</span>
+                    </label>
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        id="snacks" 
+                        ${currentSelection?.snacks ? 'checked' : ''}
+                        style="width: 1.25rem; height: 1.25rem; cursor: pointer;"
+                      >
+                      <span style="font-size: ${fontSize}px;">Evening Snacks</span>
+                    </label>
+                    <button 
+                      type="submit"
+                      id="submitBtn"
+                      style="width: 100%; padding: 0.75rem; border-radius: 0.5rem; font-weight: 600; font-size: ${fontSize}px; background-color: ${primaryColor}; color: white; border: none; cursor: pointer;"
+                      onmouseover="this.style.opacity='0.9'"
+                      onmouseout="this.style.opacity='1'"
+                    >
+                      ${currentSelection ? 'Update Selection' : 'Submit Selection'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            `}
+          </div>
+        </div>
+      `;
+
+      // Attach event listeners
+      if (!currentEmployeeId) {
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+      } else {
+        document.getElementById('mealSelectionForm').addEventListener('submit', handleMealSelection);
+      }
+    }
+
+    // Admin View Functions
+    function renderAdminView() {
+      const config = window.elementSdk.config;
+      const appTitle = config.app_title || defaultConfig.app_title;
+      const companyName = config.company_name || defaultConfig.company_name;
+      const backgroundColor = config.background_color || defaultConfig.background_color;
+      const surfaceColor = config.surface_color || defaultConfig.surface_color;
+      const textColor = config.text_color || defaultConfig.text_color;
+      const primaryColor = config.primary_action_color || defaultConfig.primary_action_color;
+      const secondaryColor = config.secondary_action_color || defaultConfig.secondary_action_color;
+      const fontSize = config.font_size || 16;
+      const fontFamily = config.font_family || 'system-ui, -apple-system, sans-serif';
+
+      const app = document.getElementById('app');
+      app.style.backgroundColor = backgroundColor;
+      app.style.color = textColor;
+      app.style.fontFamily = `${fontFamily}, system-ui, -apple-system, sans-serif`;
+
+      const tomorrowDate = getTomorrowDate();
+      const tomorrowSelections = allMealSelections.filter(s => s.date === tomorrowDate);
+      
+      const breakfastCount = tomorrowSelections.filter(s => s.breakfast).length;
+      const lunchCount = tomorrowSelections.filter(s => s.lunch).length;
+      const snacksCount = tomorrowSelections.filter(s => s.snacks).length;
+      const totalEmployees = tomorrowSelections.length;
+
+      app.innerHTML = `
+        <div class="flex-1 flex flex-col">
+          <!-- Header -->
+          <div class="shadow-sm" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+            <div class="max-w-6xl mx-auto flex justify-between items-center">
+              <div>
+                <h1 style="font-size: ${fontSize * 1.75}px; font-weight: 700; margin-bottom: 0.25rem;">${appTitle} - Admin</h1>
+                <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7;">${companyName}</p>
+              </div>
+              <button 
+                onclick="switchToEmployeeView()"
+                style="padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: ${fontSize * 0.875}px; background-color: ${secondaryColor}; color: white; border: none; cursor: pointer;"
+                onmouseover="this.style.opacity='0.9'"
+                onmouseout="this.style.opacity='1'"
+              >
+                Employee View
+              </button>
+            </div>
+          </div>
+
+          <!-- Main Content -->
+          <div class="flex-1 max-w-6xl mx-auto w-full" style="padding: 2rem 1.5rem;">
+            <div class="space-y-6">
+              <!-- Date Info -->
+              <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                <h2 style="font-size: ${fontSize * 1.5}px; font-weight: 600; margin-bottom: 0.5rem;">Report for Tomorrow</h2>
+                <p style="font-size: ${fontSize}px; opacity: 0.7;">${formatDate(tomorrowDate)}</p>
+              </div>
+
+              <!-- Summary Cards -->
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7; margin-bottom: 0.5rem;">Total Employees</p>
+                  <p style="font-size: ${fontSize * 2}px; font-weight: 700;">${totalEmployees}</p>
+                </div>
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7; margin-bottom: 0.5rem;">🌅 Breakfast</p>
+                  <p style="font-size: ${fontSize * 2}px; font-weight: 700;">${breakfastCount}</p>
+                </div>
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7; margin-bottom: 0.5rem;">🍽️ Lunch</p>
+                  <p style="font-size: ${fontSize * 2}px; font-weight: 700;">${lunchCount}</p>
+                </div>
+                <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                  <p style="font-size: ${fontSize * 0.875}px; opacity: 0.7; margin-bottom: 0.5rem;">☕ Snacks</p>
+                  <p style="font-size: ${fontSize * 2}px; font-weight: 700;">${snacksCount}</p>
+                </div>
+              </div>
+
+              <!-- Detailed Report -->
+              <div class="shadow-md rounded-lg" style="background-color: ${surfaceColor}; padding: 1.5rem;">
+                <h3 style="font-size: ${fontSize * 1.25}px; font-weight: 600; margin-bottom: 1rem;">Employee Details</h3>
+                ${totalEmployees === 0 ? `
+                  <p style="font-size: ${fontSize}px; opacity: 0.7; text-align: center; padding: 2rem;">No meal selections yet for tomorrow</p>
+                ` : `
+                  <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <thead>
+                        <tr style="border-bottom: 2px solid #e2e8f0;">
+                          <th style="text-align: left; padding: 0.75rem; font-size: ${fontSize * 0.875}px; font-weight: 600;">Employee ID</th>
+                          <th style="text-align: left; padding: 0.75rem; font-size: ${fontSize * 0.875}px; font-weight: 600;">Name</th>
+                          <th style="text-align: center; padding: 0.75rem; font-size: ${fontSize * 0.875}px; font-weight: 600;">Breakfast</th>
+                          <th style="text-align: center; padding: 0.75rem; font-size: ${fontSize * 0.875}px; font-weight: 600;">Lunch</th>
+                          <th style="text-align: center; padding: 0.75rem; font-size: ${fontSize * 0.875}px; font-weight: 600;">Snacks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${tomorrowSelections.map(selection => `
+                          <tr style="border-bottom: 1px solid #e2e8f0;">
+                            <td style="padding: 0.75rem; font-size: ${fontSize * 0.875}px;">${selection.employee_id}</td>
+                            <td style="padding: 0.75rem; font-size: ${fontSize * 0.875}px;">${selection.employee_name}</td>
+                            <td style="text-align: center; padding: 0.75rem; font-size: ${fontSize * 0.875}px;">${selection.breakfast ? '✓' : '—'}</td>
+                            <td style="text-align: center; padding: 0.75rem; font-size: ${fontSize * 0.875}px;">${selection.lunch ? '✓' : '—'}</td>
+                            <td style="text-align: center; padding: 0.75rem; font-size: ${fontSize * 0.875}px;">${selection.snacks ? '✓' : '—'}</td>
+                          </tr>
+                        `).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Event Handlers
+    async function handleLogin(e) {
+      e.preventDefault();
+      const employeeId = document.getElementById('employeeId').value.trim();
+      const employeeName = document.getElementById('employeeName').value.trim();
+      
+      if (!employeeId || !employeeName) {
+        showToast('Please fill in all fields', 'error');
+        return;
+      }
+
+      currentEmployeeId = employeeId;
+      currentEmployeeName = employeeName;
+      renderCurrentView();
+    }
+
+    function logout() {
+      currentEmployeeId = '';
+      currentEmployeeName = '';
+      renderCurrentView();
+    }
+
+    async function handleMealSelection(e) {
+      e.preventDefault();
+      
+      if (allMealSelections.length >= 999) {
+        showToast('Maximum limit of 999 selections reached', 'error');
+        return;
+      }
+
+      const breakfast = document.getElementById('breakfast').checked;
+      const lunch = document.getElementById('lunch').checked;
+      const snacks = document.getElementById('snacks').checked;
+      const tomorrowDate = getTomorrowDate();
+      const currentSelection = getCurrentUserSelection();
+
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+      submitBtn.style.opacity = '0.6';
+
+      if (currentSelection) {
+        // Update existing selection
+        const updatedSelection = {
+          ...currentSelection,
+          breakfast,
+          lunch,
+          snacks,
+          updated_at: new Date().toISOString()
+        };
+        
+        const result = await window.dataSdk.update(updatedSelection);
+        
+        if (result.isOk) {
+          showToast('Meal selection updated successfully!');
+        } else {
+          showToast('Failed to update selection. Please try again.', 'error');
+        }
+      } else {
+        // Create new selection
+        const newSelection = {
+          id: `${currentEmployeeId}_${tomorrowDate}`,
+          employee_id: currentEmployeeId,
+          employee_name: currentEmployeeName,
+          date: tomorrowDate,
+          breakfast,
+          lunch,
+          snacks,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        const result = await window.dataSdk.create(newSelection);
+        
+        if (result.isOk) {
+          showToast('Meal selection submitted successfully!');
+        } else {
+          showToast('Failed to submit selection. Please try again.', 'error');
+        }
+      }
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = currentSelection ? 'Update Selection' : 'Submit Selection';
+      submitBtn.style.opacity = '1';
+    }
+
+    function switchToAdminView() {
+      currentView = 'admin';
+      renderCurrentView();
+    }
+
+    function switchToEmployeeView() {
+      currentView = 'employee';
+      renderCurrentView();
+    }
+
+    function renderCurrentView() {
+      if (currentView === 'admin') {
+        renderAdminView();
+      } else {
+        renderEmployeeView();
+      }
+    }
+
+    // Element SDK configuration
+    async function onConfigChange(config) {
+      renderCurrentView();
+    }
+
+    function mapToCapabilities(config) {
+      return {
+        recolorables: [
+          {
+            get: () => config.background_color || defaultConfig.background_color,
+            set: (value) => {
+              config.background_color = value;
+              window.elementSdk.setConfig({ background_color: value });
+            }
+          },
+          {
+            get: () => config.surface_color || defaultConfig.surface_color,
+            set: (value) => {
+              config.surface_color = value;
+              window.elementSdk.setConfig({ surface_color: value });
+            }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (value) => {
+              config.text_color = value;
+              window.elementSdk.setConfig({ text_color: value });
+            }
+          },
+          {
+            get: () => config.primary_action_color || defaultConfig.primary_action_color,
+            set: (value) => {
+              config.primary_action_color = value;
+              window.elementSdk.setConfig({ primary_action_color: value });
+            }
+          },
+          {
+            get: () => config.secondary_action_color || defaultConfig.secondary_action_color,
+            set: (value) => {
+              config.secondary_action_color = value;
+              window.elementSdk.setConfig({ secondary_action_color: value });
+            }
+          }
+        ],
+        borderables: [],
+        fontEditable: {
+          get: () => config.font_family || defaultConfig.font_family,
+          set: (value) => {
+            config.font_family = value;
+            window.elementSdk.setConfig({ font_family: value });
+          }
+        },
+        fontSizeable: {
+          get: () => config.font_size || defaultConfig.font_size,
+          set: (value) => {
+            config.font_size = value;
+            window.elementSdk.setConfig({ font_size: value });
+          }
+        }
+      };
+    }
+
+    function mapToEditPanelValues(config) {
+      return new Map([
+        ['app_title', config.app_title || defaultConfig.app_title],
+        ['company_name', config.company_name || defaultConfig.company_name],
+        ['breakfast_menu', config.breakfast_menu || defaultConfig.breakfast_menu],
+        ['lunch_menu', config.lunch_menu || defaultConfig.lunch_menu],
+        ['snacks_menu', config.snacks_menu || defaultConfig.snacks_menu],
+        ['cutoff_time', config.cutoff_time || defaultConfig.cutoff_time]
+      ]);
+    }
+
+    // Initialize Element SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities,
+        mapToEditPanelValues
+      });
+    }
+
+    // Start the app
+    initializeApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9992235ae0f44013',t:'MTc2MjIzODYxNy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
